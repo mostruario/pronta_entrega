@@ -5,8 +5,6 @@ streamlit run app.py
 
 
 
-
-
 # app.py
 import streamlit as st
 import pandas as pd
@@ -19,15 +17,17 @@ from io import BytesIO
 st.set_page_config(page_title="Catálogo - Pronta Entrega", layout="wide")
 
 # ---------- LOGO À ESQUERDA, ACIMA DO TÍTULO ----------
-logo = Image.open(r"P:\PROJETO\logo.png")
+logo_path = r"P:\PROJETO\logo.png"
+with open(logo_path, "rb") as f:
+    logo_b64 = base64.b64encode(f.read()).decode()
+
 st.markdown(
-    """
-    <div style="display:flex; align-items:center; justify-content:flex-start; margin-bottom:10px;">
-        <img src="data:image/png;base64,{}" style="width:90px; height:auto; object-fit:contain;">
+    f"""
+    <div style="display:flex; align-items:center; justify-content:flex-start; margin-bottom:10px; overflow:visible;">
+        <img src="data:image/png;base64,{logo_b64}" 
+             style="width:90px; height:auto; object-fit:contain; display:block;">
     </div>
-    """.format(
-        base64.b64encode(open(r"P:\PROJETO\logo.png", "rb").read()).decode()
-    ),
+    """,
     unsafe_allow_html=True
 )
 
