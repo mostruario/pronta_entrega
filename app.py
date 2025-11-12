@@ -9,24 +9,29 @@ from io import BytesIO
 # ---------- CONFIGURAÇÃO ----------
 st.set_page_config(page_title="Catálogo - Pronta Entrega", layout="wide")
 
+# ---------- DEBUG (mude para True se quiser ver informações de diagnóstico no app) ----------
+DEBUG = False
+
+# ---------- CAMINHO BASE (funciona local e no Render) ----------
+BASE_DIR = Path(__file__).resolve().parent
+
 # ---------- LOGO À ESQUERDA, ACIMA DO TÍTULO ----------
-# Caminho relativo (Render não tem acesso a P:\)
-logo_path = Path(__file__).parent / "STATIC" / "IMAGENS" / "logo.png"
+logo_path = BASE_DIR / "STATIC" / "IMAGENS" / "logo.png"
 if logo_path.exists():
     with open(logo_path, "rb") as f:
         logo_b64 = base64.b64encode(f.read()).decode()
-
-    st.markdown(
-        f"""
-        <div style="display:flex; align-items:center; justify-content:flex-start; margin-bottom:10px; overflow:visible;">
-            <img src="data:image/png;base64,{logo_b64}" 
-                 style="width:90px; height:auto; object-fit:contain; display:block;">
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 else:
-    st.warning("⚠️ Logo não encontrada. Verifique se 'STATIC/IMAGENS/logo.png' existe no repositório.")
+    logo_b64 = ""
+
+st.markdown(
+    f"""
+    <div style="display:flex; align-items:center; justify-content:flex-start; margin-bottom:10px; overflow:visible;">
+        <img src="data:image/png;base64,{logo_b64}" 
+             style="width:90px; height:auto; object-fit:contain; display:block;">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # ---------- TÍTULO CENTRALIZADO ----------
 st.markdown(
@@ -35,7 +40,7 @@ st.markdown(
 )
 
 # ---------- CARREGAR PLANILHA ----------
-DATA_PATH = Path(__file__).parent / "ESTOQUE PRONTA ENTREGA CLAMI.xlsx"
+DATA_PATH = BASE_DIR / "ESTOQUE PRONTA ENTREGA CLAMI.xlsx"
 if not DATA_PATH.exists():
     st.error("❌ Arquivo da planilha não encontrado no diretório do projeto.")
     st.stop()
@@ -59,14 +64,26 @@ with col1:
         }
         div.stMultiSelect [data-baseweb="tag"],
         div.stMultiSelect [data-baseweb="tag"] > div,
-        div.stMultiSelect [data-baseweb="tag"] span {
+        div.stMultiSelect [data-baseweb="tag"] span,
+        div.stMultiSelect [data-testid="stMultiSelect"] [data-baseweb="tag"],
+        div.stMultiSelect .css-1kidpmw,
+        div.stMultiSelect .css-1n0xq7o {
             background-color: #e0e0e0 !important;
             border: none !important;
             color: #333 !important;
             transition: background-color 0.2s ease-in-out;
         }
-        div.stMultiSelect [data-baseweb="tag"]:hover {
+        div.stMultiSelect [data-baseweb="tag"]:hover,
+        div.stMultiSelect .css-1kidpmw:hover,
+        div.stMultiSelect .css-1n0xq7o:hover {
             background-color: #d1d1d1 !important;
+        }
+        div.stMultiSelect *[style*="background"] {
+            background-color: inherit !important;
+        }
+        div.stMultiSelect [data-baseweb="tag"] svg,
+        div.stMultiSelect [data-baseweb="tag"] > span {
+            color: #333 !important;
         }
         div.stMultiSelect > div:first-child:focus-within {
             border-color: #4B7BEC !important;
@@ -77,9 +94,7 @@ with col1:
         """,
         unsafe_allow_html=True
     )
-    marca_filter = st.multiselect(
-        "Marca", options=df["MARCA"].unique()
-    )
+    marca_filter = st.multiselect("Marca", options=df["MARCA"].unique())
 
 with col2:
     st.markdown(
@@ -109,8 +124,13 @@ if search_term:
 
 st.write(f"Total de produtos exibidos: {len(df_filtered)}")
 
-# ---------- CAMINHO DAS IMAGENS (agora relativo para o Render) ----------
-IMAGES_DIR = Path(__file__).parent / "STATIC" / "IMAGENS"
+# ---------- CAMINHO DAS IMAGENS (agora relativo para o repo) ----------
+IMAGES_DIR = BASE_DIR / "STATIC" / "IMAGENS"
+
+# Configuração do fallback GitHub raw (se desejar usar)
+GITHUB_USER = "mostruario"
+GITHUB_REPO = "catalogo_pronta_entrega"
+GITHUB_BRANCH = "main"  # mude se usa outra branch
 
 # ---------- 5 CARDS POR LINHA ----------
 num_cols = 5
@@ -119,26 +139,53 @@ for i in range(0, len(df_filtered), num_cols):
     for j, idx in enumerate(range(i, min(i + num_cols, len(df_filtered)))):
         row = df_filtered.iloc[idx]
         with cols[j]:
-            # ---------- IMAGEM DO PRODUTO ----------
+            # ---------- IMAGEM DO PRODUTO (tenta local, senão usa raw.githubusercontent) ----------
             img_name = None
             if "LINK_IMAGEM" in row and pd.notna(row["LINK_IMAGEM"]):
                 raw_path = Path(str(row["LINK_IMAGEM"]))
-                img_name = raw_path.name  # pega só o nome do arquivo
+                img_name = raw_path.name.strip()
 
+            # caminho local esperado
             if img_name:
                 img_path = IMAGES_DIR / img_name
-                if not img_path.exists():
-                    img_path = IMAGES_DIR / "SEM IMAGEM.jpg"
             else:
                 img_path = IMAGES_DIR / "SEM IMAGEM.jpg"
 
+            img_str = ""
+            img_html_src = ""
+
+            # tenta abrir localmente primeiro
             try:
-                image = Image.open(img_path)
-                buffered = BytesIO()
-                image.save(buffered, format="PNG")
-                img_str = base64.b64encode(buffered.getvalue()).decode()
+                if img_path.exists():
+                    image = Image.open(img_path)
+                    buffered = BytesIO()
+                    image.save(buffered, format="PNG")
+                    img_str = base64.b64encode(buffered.getvalue()).decode()
+                    img_html_src = f"data:image/png;base64,{img_str}"
+                else:
+                    raise FileNotFoundError("local image not found")
             except Exception:
-                img_str = ""
+                # fallback: construir URL raw do GitHub
+                if img_name:
+                    img_name_quoted = str(img_name).replace(" ", "%20")
+                    img_html_src = (
+                        f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/"
+                        f"{GITHUB_BRANCH}/STATIC/IMAGENS/{img_name_quoted}"
+                    )
+                else:
+                    img_html_src = (
+                        f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/"
+                        f"{GITHUB_BRANCH}/STATIC/IMAGENS/SEM%20IMAGEM.jpg"
+                    )
+
+            # Debug opcional (liga DEBUG = True no topo para ver)
+            if DEBUG:
+                st.write({
+                    "img_name": img_name,
+                    "img_path": str(img_path),
+                    "img_path_exists": img_path.exists(),
+                    "img_html_src": img_html_src
+                })
 
             # ---------- FORMATAR "DE" E "POR" ----------
             de_raw = row.get('DE', 0)
@@ -184,7 +231,7 @@ for i in range(0, len(df_filtered), num_cols):
                     overflow:hidden;
                 ">
                     <div style="text-align:center; flex-shrink:0;">
-                        <img src="data:image/png;base64,{img_str}" 
+                        <img src="{img_html_src}" 
                              style="width:100%; height:auto; object-fit:cover; border-radius:15px 15px 0 0;">
                     </div>
                     <div style="padding:10px; text-align:left; flex-grow:1; overflow:hidden;">
