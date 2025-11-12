@@ -59,7 +59,7 @@ for idx, (_, row) in enumerate(df_filtrado.iterrows()):
 
         st.markdown(f"**{row['DESCRIÇÃO DO PRODUTO']}**", unsafe_allow_html=True)
         st.markdown(f"<small><b>Código:</b> {row['CODIGO DO PRODUTO']}</small>", unsafe_allow_html=True)
-        st.markdown(f"<small><b>Marca:</b> {row['Marca']}</small>", unsafe_allow_html=True)
+        st.markdown(f"<small><b>Marca:</b> {row['MARCA']}</small>", unsafe_allow_html=True)
         st.markdown(f"<small><b>Comp.:</b> {row['Comp.']}, <b>Alt.:</b> {row['Alt.']}, <b>Larg.:</b> {row['Larg.']}</small>", unsafe_allow_html=True)
         st.markdown(f"<small><b>De:</b> R$ {row['Preço De']}</small>", unsafe_allow_html=True)
         st.markdown(f"<small><b>Por:</b> <span style='color:red;'>R$ {row['Preço Por']}</span></small>", unsafe_allow_html=True)
