@@ -9,13 +9,13 @@ from io import BytesIO
 # ---------- CONFIGURAÇÃO ----------
 st.set_page_config(page_title="Catálogo - Pronta Entrega", layout="wide")
 
-# ---------- DEBUG (mude para True se quiser ver informações de diagnóstico no app) ----------
+# ---------- DEBUG ----------
 DEBUG = False
 
-# ---------- CAMINHO BASE (funciona local e no Render) ----------
+# ---------- CAMINHO BASE ----------
 BASE_DIR = Path(__file__).resolve().parent
 
-# ---------- LOGO À ESQUERDA, ACIMA DO TÍTULO ----------
+# ---------- LOGO ----------
 logo_path = BASE_DIR / "STATIC" / "IMAGENS" / "logo.png"
 if logo_path.exists():
     with open(logo_path, "rb") as f:
@@ -33,23 +33,23 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ---------- TÍTULO CENTRALIZADO ----------
+# ---------- TÍTULO ----------
 st.markdown(
     '<h1 style="text-align: center;">CATÁLOGO - PRONTA ENTREGA</h1>',
     unsafe_allow_html=True
 )
 
-# ---------- CARREGAR PLANILHA ----------
+# ---------- PLANILHA ----------
 DATA_PATH = BASE_DIR / "ESTOQUE PRONTA ENTREGA CLAMI.xlsx"
 if not DATA_PATH.exists():
-    st.error("❌ Arquivo da planilha não encontrado no diretório do projeto.")
+    st.error("❌ Arquivo da planilha não encontrado.")
     st.stop()
 
 df = pd.read_excel(DATA_PATH, header=1)
 df.columns = df.columns.str.strip()
 df = df.drop_duplicates(subset="CODIGO DO PRODUTO", keep="first")
 
-# ---------- FILTROS HORIZONTAIS ESTILIZADOS ----------
+# ---------- FILTROS ----------
 col1, col2 = st.columns([2, 3])
 
 with col1:
@@ -61,34 +61,6 @@ with col1:
             border: 1.5px solid #4B7BEC !important;
             border-radius: 10px !important;
             padding: 5px 8px !important;
-        }
-        div.stMultiSelect [data-baseweb="tag"],
-        div.stMultiSelect [data-baseweb="tag"] > div,
-        div.stMultiSelect [data-baseweb="tag"] span,
-        div.stMultiSelect [data-testid="stMultiSelect"] [data-baseweb="tag"],
-        div.stMultiSelect .css-1kidpmw,
-        div.stMultiSelect .css-1n0xq7o {
-            background-color: #e0e0e0 !important;
-            border: none !important;
-            color: #333 !important;
-            transition: background-color 0.2s ease-in-out;
-        }
-        div.stMultiSelect [data-baseweb="tag"]:hover,
-        div.stMultiSelect .css-1kidpmw:hover,
-        div.stMultiSelect .css-1n0xq7o:hover {
-            background-color: #d1d1d1 !important;
-        }
-        div.stMultiSelect *[style*="background"] {
-            background-color: inherit !important;
-        }
-        div.stMultiSelect [data-baseweb="tag"] svg,
-        div.stMultiSelect [data-baseweb="tag"] > span {
-            color: #333 !important;
-        }
-        div.stMultiSelect > div:first-child:focus-within {
-            border-color: #4B7BEC !important;
-            box-shadow: 0 0 0 2px rgba(75,123,236,0.18) !important;
-            background-color: #ffffff !important;
         }
         </style>
         """,
@@ -104,16 +76,13 @@ with col2:
             font-size: 16px;
             height: 35px;
         }
-        div.stTextInput > label {
-            font-size: 18px;
-        }
         </style>
         """,
         unsafe_allow_html=True
     )
     search_term = st.text_input("Pesquisar Produto")
 
-# ---------- FILTRO DE DADOS ----------
+# ---------- APLICA FILTROS ----------
 if marca_filter:
     df_filtered = df[df["MARCA"].isin(marca_filter)]
 else:
@@ -124,38 +93,40 @@ if search_term:
 
 st.write(f"Total de produtos exibidos: {len(df_filtered)}")
 
-# ---------- CAMINHO DAS IMAGENS (agora relativo para o repo) ----------
+# ---------- CAMINHOS ----------
 IMAGES_DIR = BASE_DIR / "STATIC" / "IMAGENS"
 
-# Configuração do fallback GitHub (Render usa apenas ele)
+# Configuração do GitHub (para as imagens renderizarem online)
 GITHUB_USER = "mostruario"
 GITHUB_REPO = "catalogo_pronta_entrega"
-GITHUB_BRANCH = "main"  # mude se usa outra branch
+GITHUB_BRANCH = "main"
 
-# ---------- 5 CARDS POR LINHA ----------
+# ---------- EXIBIÇÃO DOS CARDS ----------
 num_cols = 5
 for i in range(0, len(df_filtered), num_cols):
     cols = st.columns(num_cols)
     for j, idx in enumerate(range(i, min(i + num_cols, len(df_filtered)))):
-
         row = df_filtered.iloc[idx]
         with cols[j]:
-
-            # ---------- IMAGEM DO PRODUTO (sempre via GitHub no Render) ----------
+            # ---------- IMAGEM DO PRODUTO (versão 100% funcional no Render) ----------
             img_name = None
             if "LINK_IMAGEM" in row and pd.notna(row["LINK_IMAGEM"]):
                 raw_path = Path(str(row["LINK_IMAGEM"]))
                 img_name = raw_path.name.strip()
+
+            if img_name:
+                img_name_quoted = str(img_name).replace(" ", "%20")
+                img_html_src = (
+                    f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/"
+                    f"{GITHUB_BRANCH}/STATIC/IMAGENS/{img_name_quoted}"
+                )
             else:
-                img_name = "SEM IMAGEM.jpg"
+                img_html_src = (
+                    f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/"
+                    f"{GITHUB_BRANCH}/STATIC/IMAGENS/SEM%20IMAGEM.jpg"
+                )
 
-            img_name_quoted = str(img_name).replace(" ", "%20")
-            img_html_src = (
-                f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/"
-                f"{GITHUB_BRANCH}/STATIC/IMAGENS/{img_name_quoted}"
-            )
-
-            # ---------- FORMATAR "DE" E "POR" ----------
+            # ---------- FORMATAR VALORES ----------
             de_raw = row.get('DE', 0)
             try:
                 de_num = float(str(de_raw).replace(',', '.'))
@@ -170,7 +141,7 @@ for i in range(0, len(df_filtered), num_cols):
                 por_num = 0
             por_valor = f"R$ {por_num:,.2f}".replace(',', 'v').replace('.', ',').replace('v', '.')
 
-            # ---------- MONTAR DIMENSÕES ----------
+            # ---------- DIMENSÕES ----------
             dimensoes = []
             if row.get('COMPRIMENTO') not in [None, 0, '0', '']:
                 dimensoes.append(f"Comp.: {row.get('COMPRIMENTO')}")
@@ -183,7 +154,7 @@ for i in range(0, len(df_filtered), num_cols):
 
             dimensoes_str = ', '.join(dimensoes)
 
-            # ---------- CARD COMPLETO ----------
+            # ---------- CARD ----------
             st.markdown(
                 f"""
                 <div style="
