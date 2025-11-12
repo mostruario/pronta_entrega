@@ -8,26 +8,21 @@ from io import BytesIO
 # ---------- CONFIGURAÇÃO ----------
 st.set_page_config(page_title="Catálogo - Pronta Entrega", layout="wide")
 
-# ---------- CAMINHO BASE ----------
-BASE_DIR = Path(__file__).parent  # funciona local e no Render
-
 # ---------- LOGO À ESQUERDA, ACIMA DO TÍTULO ----------
-logo_path = BASE_DIR / "logo.png"
+logo_path = Path("STATIC/IMAGENS/logo.png")
 if logo_path.exists():
     with open(logo_path, "rb") as f:
         logo_b64 = base64.b64encode(f.read()).decode()
-else:
-    logo_b64 = ""  # evita erro caso o logo não exista
 
-st.markdown(
-    f"""
-    <div style="display:flex; align-items:center; justify-content:flex-start; margin-bottom:10px; overflow:visible;">
-        <img src="data:image/png;base64,{logo_b64}" 
-             style="width:90px; height:auto; object-fit:contain; display:block;">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+    st.markdown(
+        f"""
+        <div style="display:flex; align-items:center; justify-content:flex-start; margin-bottom:10px; overflow:visible;">
+            <img src="data:image/png;base64,{logo_b64}" 
+                style="width:90px; height:auto; object-fit:contain; display:block;">
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # ---------- TÍTULO CENTRALIZADO ----------
 st.markdown(
@@ -36,7 +31,7 @@ st.markdown(
 )
 
 # ---------- CARREGAR PLANILHA ----------
-DATA_PATH = BASE_DIR / "ESTOQUE PRONTA ENTREGA CLAMI.xlsx"
+DATA_PATH = Path("ESTOQUE PRONTA ENTREGA CLAMI.xlsx")
 df = pd.read_excel(DATA_PATH, header=1)
 df.columns = df.columns.str.strip()
 df = df.drop_duplicates(subset="CODIGO DO PRODUTO", keep="first")
@@ -86,7 +81,9 @@ with col1:
         """,
         unsafe_allow_html=True
     )
-    marca_filter = st.multiselect("Marca", options=df["MARCA"].unique())
+    marca_filter = st.multiselect(
+        "Marca", options=df["MARCA"].unique()
+    )
 
 with col2:
     st.markdown(
@@ -116,7 +113,8 @@ if search_term:
 
 st.write(f"Total de produtos exibidos: {len(df_filtered)}")
 
-IMAGES_DIR = BASE_DIR / "IMAGENS"
+# ---------- DIRETÓRIO DE IMAGENS ----------
+IMAGES_DIR = Path("STATIC/IMAGENS")
 
 # ---------- 5 CARDS POR LINHA ----------
 num_cols = 5
@@ -125,24 +123,23 @@ for i in range(0, len(df_filtered), num_cols):
     for j, idx in enumerate(range(i, min(i + num_cols, len(df_filtered)))):
         row = df_filtered.iloc[idx]
         with cols[j]:
-            img_name_raw = row.get("LINK_IMAGEM", None)
-            img_name = Path(str(img_name_raw)).name if pd.notna(img_name_raw) else None
-
+            # ---------- IMAGEM DO PRODUTO ----------
+            img_name = row.get("LINK_IMAGEM", None)
             if img_name:
-                img_path = IMAGES_DIR / img_name
+                # Se houver caminho completo, pega apenas o nome do arquivo
+                img_file = Path(img_name).name
+                img_path = IMAGES_DIR / img_file
                 if not img_path.exists():
                     img_path = IMAGES_DIR / "SEM IMAGEM.jpg"
             else:
                 img_path = IMAGES_DIR / "SEM IMAGEM.jpg"
 
-            if img_path.exists():
-                image = Image.open(img_path)
-                buffered = BytesIO()
-                image.save(buffered, format="PNG")
-                img_str = base64.b64encode(buffered.getvalue()).decode()
-            else:
-                img_str = ""
+            image = Image.open(img_path)
+            buffered = BytesIO()
+            image.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
 
+            # ---------- FORMATAR "DE" E "POR" ----------
             de_raw = row.get('DE', 0)
             try:
                 de_num = float(str(de_raw).replace(',', '.'))
@@ -157,6 +154,7 @@ for i in range(0, len(df_filtered), num_cols):
                 por_num = 0
             por_valor = f"R$ {por_num:,.2f}".replace(',', 'v').replace('.', ',').replace('v', '.')
 
+            # ---------- MONTAR DIMENSÕES ----------
             dimensoes = []
             if row.get('COMPRIMENTO') not in [None, 0, '0', '']:
                 dimensoes.append(f"Comp.: {row.get('COMPRIMENTO')}")
@@ -166,8 +164,10 @@ for i in range(0, len(df_filtered), num_cols):
                 dimensoes.append(f"Larg.: {row.get('LARGURA')}")
             if row.get('DIAMETRO') not in [None, 0, '0', '']:
                 dimensoes.append(f"Ø Diam: {row.get('DIAMETRO')}")
+
             dimensoes_str = ', '.join(dimensoes)
 
+            # ---------- CARD COMPLETO ----------
             st.markdown(
                 f"""
                 <div style="
@@ -184,7 +184,7 @@ for i in range(0, len(df_filtered), num_cols):
                 ">
                     <div style="text-align:center; flex-shrink:0;">
                         <img src="data:image/png;base64,{img_str}" 
-                             style="width:100%; height:auto; object-fit:cover; border-radius:15px 15px 0 0;">
+                            style="width:100%; height:auto; object-fit:cover; border-radius:15px 15px 0 0;">
                     </div>
                     <div style="padding:10px; text-align:left; flex-grow:1; overflow:hidden;">
                         <h4 style="margin-bottom:5px; font-size:18px;">{row['DESCRIÇÃO DO PRODUTO']}</h4>
