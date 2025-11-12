@@ -1,83 +1,169 @@
+# app.py
 import streamlit as st
 import pandas as pd
 from PIL import Image
-import os
+from pathlib import Path
+import base64
+from io import BytesIO
 
-# ============ CONFIGURAÇÕES ============
+# ---------- CONFIGURAÇÃO ----------
 st.set_page_config(page_title="Catálogo - Pronta Entrega", layout="wide")
 
-# Caminho base do projeto (compatível com Render e Windows)
-BASE_DIR = os.path.dirname(__file__)
+# ---------- BASE DIR ----------
+BASE_DIR = Path(__file__).parent  # pasta onde está o app.py
+IMAGES_DIR = BASE_DIR / "STATIC" / "IMAGENS"
+LOGO_PATH = BASE_DIR / "STATIC" / "logo.png"
+DATA_PATH = BASE_DIR / "ESTOQUE PRONTA ENTREGA CLAMI.xlsx"
 
-# Caminhos para pastas
-STATIC_DIR = os.path.join(BASE_DIR, "STATIC", "IMAGENS")
-EXCEL_PATH = os.path.join(BASE_DIR, "ESTOQUE PRONTA ENTREGA CLAMI.xlsx")
+# ---------- LOGO À ESQUERDA, ACIMA DO TÍTULO ----------
+logo = Image.open(LOGO_PATH)
+with open(LOGO_PATH, "rb") as f:
+    logo_base64 = base64.b64encode(f.read()).decode()
 
-# ============ LOGO ============
-try:
-    logo_path = os.path.join(STATIC_DIR, "logo.png")
-    logo = Image.open(logo_path)
-    st.sidebar.image(logo, use_container_width=True)
-except FileNotFoundError:
-    st.sidebar.warning("⚠️ Logo não encontrada.")
+st.markdown(
+    f"""
+    <div style="display:flex; align-items:center; justify-content:flex-start; margin-bottom:10px;">
+        <img src="data:image/png;base64,{logo_base64}" style="width:90px; height:auto; object-fit:contain;">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-# ============ CARREGAR DADOS ============
-try:
-    df = pd.read_excel(EXCEL_PATH)
-except FileNotFoundError:
-    st.error("❌ Arquivo de catálogo não encontrado. Verifique se 'ESTOQUE PRONTA ENTREGA CLAMI.xlsx' está no mesmo diretório do app.py.")
-    st.stop()
+# ---------- TÍTULO CENTRALIZADO ----------
+st.markdown(
+    '<h1 style="text-align: center;">CATÁLOGO - PRONTA ENTREGA</h1>',
+    unsafe_allow_html=True
+)
 
-# ============ FUNÇÃO PARA IMAGENS ============
-def carregar_imagem(nome_arquivo):
-    caminho = os.path.join(STATIC_DIR, nome_arquivo)
-    if os.path.exists(caminho):
-        return Image.open(caminho)
-    else:
-        return Image.open(os.path.join(STATIC_DIR, "SEM IMAGEM.jpg"))
+# ---------- CARREGAR PLANILHA ----------
+df = pd.read_excel(DATA_PATH, header=1)
+df.columns = df.columns.str.strip()
+df = df.drop_duplicates(subset="CODIGO DO PRODUTO", keep="first")
 
-# ============ TÍTULO ============
-st.title("📦 Catálogo - Pronta Entrega")
-st.markdown("Explore os produtos disponíveis em nosso estoque!")
+# ---------- FILTROS HORIZONTAIS ESTILIZADOS ----------
+col1, col2 = st.columns([2, 3])
 
-# ============ CAMPO DE PESQUISA ============
-st.markdown("### 🔍 Pesquisar Produto")
-pesquisa = st.text_input("Digite o nome ou código do produto:").strip().lower()
+with col1:
+    st.markdown(
+        """
+        <style>
+        div.stMultiSelect > div:first-child { background-color: #ffffff !important; border: 1.5px solid #4B7BEC !important; border-radius: 10px !important; padding: 5px 8px !important; }
+        div.stMultiSelect [data-baseweb="tag"], div.stMultiSelect [data-baseweb="tag"] > div, div.stMultiSelect [data-baseweb="tag"] span, div.stMultiSelect [data-testid="stMultiSelect"] [data-baseweb="tag"], div.stMultiSelect .css-1kidpmw, div.stMultiSelect .css-1n0xq7o { background-color: #e0e0e0 !important; border: none !important; color: #333 !important; transition: background-color 0.2s ease-in-out; }
+        div.stMultiSelect [data-baseweb="tag"]:hover, div.stMultiSelect .css-1kidpmw:hover, div.stMultiSelect .css-1n0xq7o:hover { background-color: #d1d1d1 !important; }
+        div.stMultiSelect *[style*="background"] { background-color: inherit !important; }
+        div.stMultiSelect [data-baseweb="tag"] svg, div.stMultiSelect [data-baseweb="tag"] > span { color: #333 !important; }
+        div.stMultiSelect > div:first-child:focus-within { border-color: #4B7BEC !important; box-shadow: 0 0 0 2px rgba(75,123,236,0.18) !important; background-color: #ffffff !important; }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    marca_filter = st.multiselect(
+        "Marca", options=df["MARCA"].unique()
+    )
 
-# ============ FILTRAR RESULTADOS ============
-if pesquisa:
-    df_filtrado = df[df.astype(str).apply(lambda x: x.str.lower().str.contains(pesquisa)).any(axis=1)]
+with col2:
+    st.markdown(
+        """
+        <style>
+        div.stTextInput > div > input { font-size: 16px; height: 35px; }
+        div.stTextInput > label { font-size: 18px; }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    search_term = st.text_input("Pesquisar Produto")
+
+# ---------- FILTRO DE DADOS ----------
+if marca_filter:
+    df_filtered = df[df["MARCA"].isin(marca_filter)]
 else:
-    df_filtrado = df.copy()
+    df_filtered = df.copy()
 
-# ============ EXIBIR RESULTADOS ============
-if df_filtrado.empty:
-    st.warning("Nenhum produto encontrado.")
-else:
-    for _, row in df_filtrado.iterrows():
-        with st.container():
-            col1, col2 = st.columns([1, 3])
-            
-            # Imagem do produto
-            nome_imagem = f"{row['DESCRIÇÃO DO PRODUTO']}.jpg"
+if search_term:
+    df_filtered = df_filtered[df_filtered["DESCRIÇÃO DO PRODUTO"].str.contains(search_term, case=False, na=False)]
+
+st.write(f"Total de produtos exibidos: {len(df_filtered)}")
+
+# ---------- 5 CARDS POR LINHA ----------
+num_cols = 5
+for i in range(0, len(df_filtered), num_cols):
+    cols = st.columns(num_cols)
+    for j, idx in enumerate(range(i, min(i + num_cols, len(df_filtered)))):
+        row = df_filtered.iloc[idx]
+        with cols[j]:
+            # ---------- IMAGEM DO PRODUTO ----------
+            img_name = row.get("LINK_IMAGEM", None)
+            if img_name:
+                img_path = IMAGES_DIR / img_name
+                if not img_path.exists():
+                    img_path = IMAGES_DIR / "SEM IMAGEM.jpg"
+            else:
+                img_path = IMAGES_DIR / "SEM IMAGEM.jpg"
+
+            image = Image.open(img_path)
+            buffered = BytesIO()
+            image.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+
+            # ---------- FORMATAR "DE" E "POR" ----------
+            de_raw = row.get('DE', 0)
             try:
-                imagem = carregar_imagem(nome_imagem)
+                de_num = float(str(de_raw).replace(',', '.'))
             except:
-                imagem = carregar_imagem("SEM IMAGEM.jpg")
-            col1.image(imagem, use_container_width=True)
+                de_num = 0
+            de_valor = f"R$ {de_num:,.2f}".replace(',', 'v').replace('.', ',').replace('v', '.')
 
-            # Informações do produto
-            col2.markdown(f"### {row['DESCRIÇÃO DO PRODUTO']}")
-            col2.write(f"**Marca:** {row['MARCA']}")
-            if not pd.isna(row['COMPRIMENTO']):
-                col2.write(f"**Medidas:** {row['COMPRIMENTO']} x {row['LARGURA']} x {row['ALTURA']}")
-            if not pd.isna(row['DIAMETRO']):
-                col2.write(f"**Diâmetro:** {row['DIAMETRO']}")
-            if not pd.isna(row['POR']):
-                col2.write(f"💰 **Preço:** R$ {row['POR']}")
-            if not pd.isna(row['DE']):
-                col2.write(f"~~De: R$ {row['DE']}~~")
-            if not pd.isna(row['DESCONTO']):
-                col2.write(f"🎯 **Desconto:** {row['DESCONTO']}%")
+            por_raw = row.get('POR', 0)
+            try:
+                por_num = float(str(por_raw).replace(',', '.'))
+            except:
+                por_num = 0
+            por_valor = f"R$ {por_num:,.2f}".replace(',', 'v').replace('.', ',').replace('v', '.')
 
-            st.divider()
+            # ---------- MONTAR DIMENSÕES ----------
+            dimensoes = []
+            if row.get('COMPRIMENTO') not in [None, 0, '0', '']:
+                dimensoes.append(f"Comp.: {row.get('COMPRIMENTO')}")
+            if row.get('ALTURA') not in [None, 0, '0', '']:
+                dimensoes.append(f"Alt.: {row.get('ALTURA')}")
+            if row.get('LARGURA') not in [None, 0, '0', '']:
+                dimensoes.append(f"Larg.: {row.get('LARGURA')}")
+            if row.get('DIAMETRO') not in [None, 0, '0', '']:
+                dimensoes.append(f"Ø Diam: {row.get('DIAMETRO')}")
+
+            dimensoes_str = ', '.join(dimensoes)
+
+            # ---------- CARD COMPLETO ----------
+            st.markdown(
+                f"""
+                <div style="
+                    border:1px solid #e0e0e0;
+                    border-radius:15px;
+                    margin:5px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    background-color:#ffffff;
+                    display:flex;
+                    flex-direction:column;
+                    justify-content:flex-start;
+                    height:800px;
+                    overflow:hidden;
+                ">
+                    <div style="text-align:center; flex-shrink:0;">
+                        <img src="data:image/png;base64,{img_str}" 
+                             style="width:100%; height:auto; object-fit:cover; border-radius:15px 15px 0 0;">
+                    </div>
+                    <div style="padding:10px; text-align:left; flex-grow:1; overflow:hidden;">
+                        <h4 style="margin-bottom:5px; font-size:18px;">{row['DESCRIÇÃO DO PRODUTO']}</h4>
+                        <p style="margin:0;"><b>Código:</b> {row['CODIGO DO PRODUTO']}</p>
+                        <p style="margin:0;"><b>Marca:</b> {row['MARCA']}</p>
+                        <p style="margin:0;">{dimensoes_str}</p>
+                        <p style="margin:0;"><b>De:</b> 
+                            <span style="text-decoration: line-through; color: #999;">{de_valor}</span></p>
+                        <p style="margin:0;"><b>Por:</b> 
+                            <span style="color:#d32f2f; font-size:20px; font-weight:bold;">{por_valor}</span></p>
+                        <p style="margin:0;"><b>Estoque:</b> {row.get('ESTOQUE DISPONIVEL','')}</p>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
