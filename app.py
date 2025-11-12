@@ -1,67 +1,80 @@
 import streamlit as st
 import pandas as pd
+from PIL import Image
 import os
 
-# --- Configuração da página ---
-st.set_page_config(page_title="Catálogo - Pronta Entrega", layout="wide")
+# ---------- CONFIGURAÇÃO DA PÁGINA ----------
+st.set_page_config(page_title="Catálogo Digital CLAMI", layout="wide")
 
-# --- Carregar logo ---
+# ---------- LOGO ----------
 logo_path = "STATIC/IMAGENS/logo.png"
 if os.path.exists(logo_path):
-    st.image(logo_path, width=150)
-else:
-    st.warning("Logo não encontrada.")
+    logo = Image.open(logo_path)
+    st.image(logo, width=250)
 
-# --- Título ---
-st.markdown("<h1 style='text-align: center;'>CATÁLOGO - PRONTA ENTREGA</h1>", unsafe_allow_html=True)
+# ---------- CARREGAR DADOS ----------
+file_path = "ESTOQUE PRONTA ENTREGA CLAMI.xlsx"
+df = pd.read_excel(file_path)
 
-# --- Carregar planilha ---
-df = pd.read_excel("ESTOQUE PRONTA ENTREGA CLAMI.xlsx", header=1)
+# ---------- NORMALIZAR NOMES DAS COLUNAS ----------
+df.columns = df.columns.str.strip().str.upper()
 
-# --- Ajuste do caminho das imagens ---
-def ajustar_caminho_imagem(caminho):
-    if pd.isna(caminho):
-        return "STATIC/IMAGENS/SEM IMAGEM.jpg"
-    nome_arquivo = os.path.basename(str(caminho))
-    return f"STATIC/IMAGENS/{nome_arquivo}"
+# ---------- AJUSTAR NOMES PARA PADRÃO ----------
+df = df.rename(columns={
+    "DESCRIÇÃO": "DESCRIÇÃO",
+    "CODIGO": "CÓDIGO",
+    "MARCA": "MARCA",
+    "COMPRIMENTO": "COMPRIMENTO",
+    "ALTURA": "ALTURA",
+    "LARGURA": "LARGURA",
+    "DIÂMETRO": "DIÂMETRO",
+    "IMAGEM": "IMAGEM"
+})
 
-df['LINK_IMAGEM'] = df['LINK_IMAGEM'].apply(ajustar_caminho_imagem)
+# ---------- FILTRO ----------
+st.sidebar.header("Filtros")
+marcas = df["MARCA"].dropna().unique()
+marca_filtro = st.sidebar.multiselect("Filtrar por Marca", marcas)
 
-# --- Filtros de pesquisa ---
-col1, col2 = st.columns([1, 2])
+if marca_filtro:
+    df = df[df["MARCA"].isin(marca_filtro)]
 
-with col1:
-    marca_selecionada = st.selectbox("Marca", options=[""] + sorted(df["MARCA"].dropna().unique().tolist()))
-with col2:
-    pesquisa = st.text_input("Pesquisar Produto")
+# ---------- GRID ----------
+colunas = st.columns(4)
 
-# --- Aplicar filtros ---
-df_filtrado = df.copy()
-if marca_selecionada:
-    df_filtrado = df_filtrado[df_filtrado["Marca"] == marca_selecionada]
-if pesquisa:
-    df_filtrado = df_filtrado[df_filtrado["Descrição"].str.contains(pesquisa, case=False, na=False)]
-
-# --- Contador de produtos ---
-st.markdown(f"**Total de produtos exibidos:** {len(df_filtrado)}")
-
-# --- Exibir produtos ---
-cols = st.columns(5)
-
-for idx, (_, row) in enumerate(df_filtrado.iterrows()):
-    col = cols[idx % 5]
+for i, (_, row) in enumerate(df.iterrows()):
+    col = colunas[i % 4]
     with col:
-        st.markdown("<div style='margin-bottom: 20px;'>", unsafe_allow_html=True)
-        try:
-            st.image(row["LINK_IMAGEM"], use_container_width=True)
-        except:
-            st.image("STATIC/IMAGENS/SEM IMAGEM.jpg", use_container_width=True)
+        st.markdown("---")
 
-        st.markdown(f"**{row['DESCRIÇÃO DO PRODUTO']}**", unsafe_allow_html=True)
-        st.markdown(f"<small><b>Código:</b> {row['CODIGO DO PRODUTO']}</small>", unsafe_allow_html=True)
-        st.markdown(f"<small><b>Marca:</b> {row['MARCA']}</small>", unsafe_allow_html=True)
-        st.markdown(f"<small><b>Comp.:</b> {row['Comp.']}, <b>Alt.:</b> {row['Alt.']}, <b>Larg.:</b> {row['Larg.']}</small>", unsafe_allow_html=True)
-        st.markdown(f"<small><b>De:</b> R$ {row['Preço De']}</small>", unsafe_allow_html=True)
-        st.markdown(f"<small><b>Por:</b> <span style='color:red;'>R$ {row['Preço Por']}</span></small>", unsafe_allow_html=True)
-        st.markdown(f"<small><b>Estoque:</b> {row['Estoque']}</small>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        # ---------- IMAGEM ----------
+        imagem_path = row.get("IMAGEM")
+        if pd.notna(imagem_path) and os.path.exists(f"STATIC/IMAGENS/{imagem_path}"):
+            st.image(f"STATIC/IMAGENS/{imagem_path}", use_container_width=True)
+        else:
+            st.image("STATIC/IMAGENS/sem_foto.png", use_container_width=True)
+
+        # ---------- DESCRIÇÃO ----------
+        st.markdown(f"**{row.get('DESCRIÇÃO', '')}**", unsafe_allow_html=True)
+
+        # ---------- CÓDIGO ----------
+        if pd.notna(row.get("CÓDIGO")):
+            st.markdown(f"<small><b>Código:</b> {row.get('CÓDIGO')}</small>", unsafe_allow_html=True)
+
+        # ---------- MARCA ----------
+        if pd.notna(row.get("MARCA")):
+            st.markdown(f"<small><b>Marca:</b> {row.get('MARCA')}</small>", unsafe_allow_html=True)
+
+        # ---------- DIMENSÕES ----------
+        dimensoes = []
+        if pd.notna(row.get("COMPRIMENTO")):
+            dimensoes.append(f"Comp.: {row.get('COMPRIMENTO')}")
+        if pd.notna(row.get("ALTURA")):
+            dimensoes.append(f"Alt.: {row.get('ALTURA')}")
+        if pd.notna(row.get("LARGURA")):
+            dimensoes.append(f"Larg.: {row.get('LARGURA')}")
+        if pd.notna(row.get("DIÂMETRO")):
+            dimensoes.append(f"Ø Diam: {row.get('DIÂMETRO')}")
+
+        if dimensoes:
+            st.markdown(f"<small>{', '.join(dimensoes)}</small>", unsafe_allow_html=True)
